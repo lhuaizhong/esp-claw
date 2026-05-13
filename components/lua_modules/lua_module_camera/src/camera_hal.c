@@ -393,14 +393,10 @@ static esp_err_t camera_open_locked(const char *dev_path, const camera_open_opts
             }
 
             if (!nearest_applied) {
-                ESP_LOGW(TAG, "VIDIOC_S_FMT failed (errno=%d), falling back to driver default", saved_errno);
-                memset(&format, 0, sizeof(format));
-                format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-                if (ioctl(s_camera.fd, VIDIOC_G_FMT, &format) != 0) {
-                    ESP_LOGE(TAG, "VIDIOC_G_FMT readback failed (errno=%d)", errno);
-                    camera_close_locked();
-                    return ESP_FAIL;
-                }
+                ESP_LOGE(TAG, "VIDIOC_S_FMT failed for requested size=%ux%u format=0x%08" PRIx32 " (errno=%d)",
+                         (unsigned)requested_width, (unsigned)requested_height, requested_pixel_format, saved_errno);
+                camera_close_locked();
+                return ESP_ERR_NOT_SUPPORTED;
             }
         }
         /* Driver may have adjusted any field — adopt whatever it reports back. */

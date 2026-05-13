@@ -41,7 +41,7 @@ for _, fmt in ipairs(formats) do
         print(string.format("    %dx%d%s", s.w, s.h, fps))
     end
     if first_choice == nil and #fmt.sizes > 0 then
-        first_choice = { format = fmt.format, width = fmt.sizes[1].w, height = fmt.sizes[1].h }
+        first_choice = { format = fmt.format, width = fmt.sizes[1].w, height = fmt.sizes[1].h, nearest = true }
     end
 end
 

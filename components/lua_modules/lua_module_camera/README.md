@@ -25,18 +25,23 @@ camera.open(paths.dev_path, {
     width  = 640,
     height = 480,
     format = "JPEG",   -- 4-char FOURCC: RGBP/RGBR/RGB3/BGR3/YUYV/UYVY/GREY/Y800/JPEG/MJPG
-    nearest = true,    -- optional: try the closest supported size if the exact size is rejected
+    nearest = true,    -- try the closest supported size if the exact size is rejected
 })
 local stream = camera.info()
 print(stream.width, stream.height, stream.pixel_format)
 ```
 
-When `nearest = true`, the service keeps the requested pixel format and only
-adjusts width/height. It first asks the driver for the exact request. If
-`VIDIOC_S_FMT` rejects it, the service enumerates sizes for that pixel format,
-chooses the closest discrete size, or clamps stepwise/continuous ranges to the
-nearest valid step, then calls `VIDIOC_S_FMT` again. `camera.info()` is still the
-source of truth because drivers may adjust the fallback size too.
+Set `nearest = true` to keep the requested pixel format and only adjust
+width/height when the exact request is rejected. The service first asks the
+driver for the exact request. If `VIDIOC_S_FMT` rejects it, the service
+enumerates sizes for that pixel format, chooses the closest discrete size, or
+clamps stepwise/continuous ranges to the nearest valid step, then calls
+`VIDIOC_S_FMT` again. `camera.info()` is still the source of truth because
+drivers may adjust the fallback size too.
+
+By default, `nearest = false`: a rejected `VIDIOC_S_FMT` fails `camera.open()`.
+The service does not silently fall back to the driver's default stream when
+explicit options were requested.
 
 If the camera is already open with non-default opts, call `camera.close()` first
 or you will get an error — re-opening with new opts is intentionally disallowed.

@@ -336,6 +336,7 @@ static esp_err_t cap_lua_run_script_execute(const char *input_json,
     cJSON *timeout_item = NULL;
     char *args_json = NULL;
     uint32_t timeout_ms = 0;
+    cap_lua_async_job_t job = {0};
     esp_err_t err;
 
     (void)ctx;
@@ -380,14 +381,13 @@ static esp_err_t cap_lua_run_script_execute(const char *input_json,
     if (timeout_ms == 0) {
         timeout_ms = CAP_LUA_SYNC_DEFAULT_TIMEOUT_MS;
     }
-    err = cap_lua_runtime_execute_file(resolved_path,
-                                       args_json,
-                                       timeout_ms,
-                                       NULL,
-                                       NULL,
-                                       NULL,
-                                       output,
-                                       output_size);
+    strlcpy(job.path, resolved_path, sizeof(job.path));
+    job.args_json = args_json;
+    job.timeout_ms = timeout_ms;
+    job.log_bytes = CAP_LUA_ASYNC_LOG_DEFAULT_BYTES;
+    job.sync_waiter = true;
+    job.created_at = time(NULL);
+    err = cap_lua_async_run_and_wait(&job, timeout_ms, output, output_size);
     free(args_json);
     return err;
 }

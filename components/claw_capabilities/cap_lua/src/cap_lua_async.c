@@ -43,6 +43,7 @@ typedef struct {
     time_t started_at;
     time_t finished_at;
     TaskHandle_t task_handle;
+    bool sync_waiter;
     /* Cooperative cancellation flag, polled from the Lua hook. */
     volatile bool stop_requested;
 } cap_lua_job_record_t;
@@ -104,7 +105,7 @@ static int cap_lua_find_reusable_slot_locked(void)
         if (!s_jobs[i].used) {
             return i;
         }
-        if (cap_lua_status_is_terminal(s_jobs[i].status)) {
+        if (cap_lua_status_is_terminal(s_jobs[i].status) && !s_jobs[i].sync_waiter) {
             if (oldest_terminal < 0 ||
                     s_jobs[i].finished_at < s_jobs[oldest_terminal].finished_at) {
                 oldest_terminal = i;
@@ -587,6 +588,130 @@ esp_err_t cap_lua_async_submit(const cap_lua_async_job_t *job,
     return err;
 }
 
+static esp_err_t cap_lua_async_copy_terminal_result_locked(int slot,
+                                                           const char *expected_job_id,
+                                                           cap_lua_job_status_t *out_status,
+                                                           char *output,
+                                                           size_t output_size)
+{
+    const char *summary = NULL;
+
+    if (slot < 0 || slot >= CAP_LUA_ASYNC_MAX_JOBS || !expected_job_id ||
+            !expected_job_id[0] || !out_status || !output || output_size == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    output[0] = '\0';
+    if (!s_jobs[slot].used ||
+            strncmp(s_jobs[slot].job_id, expected_job_id,
+                    sizeof(s_jobs[slot].job_id)) != 0) {
+        snprintf(output, output_size, "Error: Lua sync job disappeared: %s", expected_job_id);
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    *out_status = s_jobs[slot].status;
+    summary = s_jobs[slot].summary;
+    if (summary && summary[0]) {
+        strlcpy(output, summary, output_size);
+    } else if (cap_lua_status_is_terminal(s_jobs[slot].status)) {
+        snprintf(output, output_size, "Lua script completed with no output.\n");
+    }
+    return ESP_OK;
+}
+
+esp_err_t cap_lua_async_run_and_wait(const cap_lua_async_job_t *job,
+                                     uint32_t wait_ms,
+                                     char *output,
+                                     size_t output_size)
+{
+    char job_id[CAP_LUA_JOB_ID_LEN] = {0};
+    char err_buf[256] = {0};
+    int slot = -1;
+    cap_lua_job_status_t status = CAP_LUA_JOB_QUEUED;
+    esp_err_t err;
+
+    if (!job || !job->path[0] || !output || output_size == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    output[0] = '\0';
+
+    err = cap_lua_async_submit(job, job_id, sizeof(job_id), err_buf, sizeof(err_buf));
+    if (err != ESP_OK) {
+        if (err_buf[0]) {
+            snprintf(output, output_size, "Error: %s", err_buf);
+        } else {
+            snprintf(output, output_size, "Error: failed to queue Lua sync job (%s)",
+                     esp_err_to_name(err));
+        }
+        return err;
+    }
+
+    if (xSemaphoreTake(s_job_lock, pdMS_TO_TICKS(1000)) != pdTRUE) {
+        snprintf(output, output_size, "Error: timed out while locating Lua sync job %s", job_id);
+        return ESP_ERR_TIMEOUT;
+    }
+    slot = cap_lua_find_slot_by_id_or_name_locked(job_id);
+    if (slot < 0) {
+        xSemaphoreGive(s_job_lock);
+        snprintf(output, output_size, "Error: Lua sync job not found after submit: %s", job_id);
+        return ESP_ERR_NOT_FOUND;
+    }
+    status = s_jobs[slot].status;
+    bool already_terminal = cap_lua_status_is_terminal(status);
+    xSemaphoreGive(s_job_lock);
+
+    if (!already_terminal) {
+        cap_lua_wait_for_terminal(slot, wait_ms);
+    }
+
+    if (xSemaphoreTake(s_job_lock, pdMS_TO_TICKS(1000)) != pdTRUE) {
+        snprintf(output, output_size, "Error: timed out while collecting Lua sync job %s", job_id);
+        return ESP_ERR_TIMEOUT;
+    }
+    err = cap_lua_async_copy_terminal_result_locked(slot, job_id, &status, output, output_size);
+    bool terminal = (err == ESP_OK) && cap_lua_status_is_terminal(status);
+    xSemaphoreGive(s_job_lock);
+
+    if (!terminal) {
+        bool was_running = false;
+        (void)cap_lua_stop_slot_and_wait(slot, job_id, 0, &was_running);
+        if (xSemaphoreTake(s_job_lock, pdMS_TO_TICKS(1000)) == pdTRUE) {
+            if (s_jobs[slot].used &&
+                    strncmp(s_jobs[slot].job_id, job_id,
+                            sizeof(s_jobs[slot].job_id)) == 0) {
+                s_jobs[slot].sync_waiter = false;
+            }
+            xSemaphoreGive(s_job_lock);
+        }
+        snprintf(output, output_size,
+                 "Error: Lua script timed out after %u ms (job_id=%s%s)",
+                 (unsigned)wait_ms,
+                 job_id,
+                 was_running ? ", stop requested" : "");
+        return ESP_ERR_TIMEOUT;
+    }
+
+    if (xSemaphoreTake(s_job_lock, pdMS_TO_TICKS(1000)) == pdTRUE) {
+        if (s_jobs[slot].used &&
+                strncmp(s_jobs[slot].job_id, job_id,
+                        sizeof(s_jobs[slot].job_id)) == 0) {
+            cap_lua_clear_slot(&s_jobs[slot]);
+        }
+        xSemaphoreGive(s_job_lock);
+    }
+
+    switch (status) {
+    case CAP_LUA_JOB_DONE:
+        return ESP_OK;
+    case CAP_LUA_JOB_TIMEOUT:
+        return ESP_ERR_TIMEOUT;
+    case CAP_LUA_JOB_STOPPED:
+        return ESP_ERR_TIMEOUT;
+    case CAP_LUA_JOB_FAILED:
+    default:
+        return ESP_FAIL;
+    }
+}
+
 static esp_err_t cap_lua_async_submit_once(const cap_lua_async_job_t *job,
                                            char *job_id_out,
                                            size_t job_id_out_size,
@@ -837,6 +962,7 @@ static esp_err_t cap_lua_async_submit_once(const cap_lua_async_job_t *job,
     s_jobs[slot].log_size = log_bytes;
     log_buf = NULL;
     s_jobs[slot].timeout_ms = job->timeout_ms;
+    s_jobs[slot].sync_waiter = job->sync_waiter;
     s_jobs[slot].stop_requested = false;
     ctx->slot = slot;
     ctx->stop_requested = &s_jobs[slot].stop_requested;
@@ -884,8 +1010,13 @@ static esp_err_t cap_lua_async_submit_once(const cap_lua_async_job_t *job,
     }
 
     if (xSemaphoreTake(s_job_lock, pdMS_TO_TICKS(1000)) == pdTRUE) {
-        s_jobs[slot].status = CAP_LUA_JOB_RUNNING;
-        s_jobs[slot].started_at = time(NULL);
+        if (s_jobs[slot].used &&
+                strncmp(s_jobs[slot].job_id, submitted_job_id,
+                        sizeof(s_jobs[slot].job_id)) == 0 &&
+                s_jobs[slot].status == CAP_LUA_JOB_QUEUED) {
+            s_jobs[slot].status = CAP_LUA_JOB_RUNNING;
+            s_jobs[slot].started_at = time(NULL);
+        }
         xSemaphoreGive(s_job_lock);
     }
 

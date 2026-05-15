@@ -358,16 +358,6 @@ Basic methods:
 - `menu` header mode: `top_fixed`, `top_unfixed`, `bottom_fixed`
 - Direction values: `none`, `left`, `right`, `top`, `bottom`, `hor`, `ver`, `all`
 
-## Demo API
-
-```lua
-local names = lvgl.demos()
-lvgl.demo(names[1])
-```
-
-`lvgl.demo(name)` requires `lvgl.init(...)` first. Available demos depend on
-the firmware's compile-time `LV_USE_DEMO_*` configuration.
-
 ## Limitations
 
 - Encoder/keypad indevs are not exposed yet.

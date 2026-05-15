@@ -43,6 +43,7 @@ typedef struct {
     uint32_t timeout_ms;
     size_t log_bytes;
     bool replace;
+    bool sync_waiter;
     time_t created_at;
 } cap_lua_async_job_t;
 
@@ -100,6 +101,10 @@ esp_err_t cap_lua_async_submit(const cap_lua_async_job_t *job,
                                size_t job_id_out_size,
                                char *err_out,
                                size_t err_out_size);
+esp_err_t cap_lua_async_run_and_wait(const cap_lua_async_job_t *job,
+                                     uint32_t wait_ms,
+                                     char *output,
+                                     size_t output_size);
 esp_err_t cap_lua_async_list_jobs(const char *status_filter,
                                   char *output,
                                   size_t output_size);

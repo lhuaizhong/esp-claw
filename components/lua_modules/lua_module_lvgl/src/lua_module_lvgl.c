@@ -51,5 +51,5 @@ esp_err_t lua_module_lvgl_register(void)
     if (err != ESP_OK) {
         return err;
     }
-    return cap_lua_register_state_cleanup(lua_lvgl_state_cleanup);
+    return cap_lua_register_exit_cleanup(lua_lvgl_exit_cleanup);
 }

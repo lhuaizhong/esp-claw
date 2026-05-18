@@ -23,15 +23,10 @@
 
 static const char *TAG = "cap_lua";
 
-typedef struct cap_lua_runtime_cleanup_node {
-    cap_lua_runtime_cleanup_fn_t cleanup_fn;
-    struct cap_lua_runtime_cleanup_node *next;
-} cap_lua_runtime_cleanup_node_t;
-
-typedef struct cap_lua_state_cleanup_node {
-    cap_lua_state_cleanup_fn_t cleanup_fn;
-    struct cap_lua_state_cleanup_node *next;
-} cap_lua_state_cleanup_node_t;
+typedef struct cap_lua_exit_cleanup_node {
+    cap_lua_exit_cleanup_fn_t cleanup_fn;
+    struct cap_lua_exit_cleanup_node *next;
+} cap_lua_exit_cleanup_node_t;
 
 typedef struct cap_lua_package_path_dir_node {
     char dir[CAP_LUA_JOB_PATH_MAX];
@@ -43,10 +38,8 @@ static cap_lua_module_t s_modules[CAP_LUA_MAX_MODULES];
 static cap_lua_package_path_dir_node_t *s_package_path_dirs;
 static size_t s_package_path_dir_count;
 static size_t s_module_count;
-static cap_lua_runtime_cleanup_node_t *s_runtime_cleanups;
-static size_t s_runtime_cleanup_count;
-static cap_lua_state_cleanup_node_t *s_state_cleanups;
-static size_t s_state_cleanup_count;
+static cap_lua_exit_cleanup_node_t *s_exit_cleanups;
+static size_t s_exit_cleanup_count;
 static bool s_builtin_modules_registered;
 static bool s_module_registration_locked;
 
@@ -1122,10 +1115,10 @@ esp_err_t cap_lua_register_modules(const cap_lua_module_t *modules, size_t count
     return ESP_OK;
 }
 
-esp_err_t cap_lua_register_runtime_cleanup(cap_lua_runtime_cleanup_fn_t cleanup_fn)
+esp_err_t cap_lua_register_exit_cleanup(cap_lua_exit_cleanup_fn_t cleanup_fn)
 {
-    cap_lua_runtime_cleanup_node_t *node = NULL;
-    cap_lua_runtime_cleanup_node_t *it = NULL;
+    cap_lua_exit_cleanup_node_t *node = NULL;
+    cap_lua_exit_cleanup_node_t *it = NULL;
 
     if (!cleanup_fn) {
         return ESP_ERR_INVALID_ARG;
@@ -1134,7 +1127,7 @@ esp_err_t cap_lua_register_runtime_cleanup(cap_lua_runtime_cleanup_fn_t cleanup_
         return ESP_ERR_INVALID_STATE;
     }
 
-    for (it = s_runtime_cleanups; it != NULL; it = it->next) {
+    for (it = s_exit_cleanups; it != NULL; it = it->next) {
         if (it->cleanup_fn == cleanup_fn) {
             return ESP_ERR_INVALID_STATE;
         }
@@ -1146,39 +1139,9 @@ esp_err_t cap_lua_register_runtime_cleanup(cap_lua_runtime_cleanup_fn_t cleanup_
     }
 
     node->cleanup_fn = cleanup_fn;
-    node->next = s_runtime_cleanups;
-    s_runtime_cleanups = node;
-    s_runtime_cleanup_count++;
-    return ESP_OK;
-}
-
-esp_err_t cap_lua_register_state_cleanup(cap_lua_state_cleanup_fn_t cleanup_fn)
-{
-    cap_lua_state_cleanup_node_t *node = NULL;
-    cap_lua_state_cleanup_node_t *it = NULL;
-
-    if (!cleanup_fn) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    if (s_module_registration_locked) {
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    for (it = s_state_cleanups; it != NULL; it = it->next) {
-        if (it->cleanup_fn == cleanup_fn) {
-            return ESP_ERR_INVALID_STATE;
-        }
-    }
-
-    node = calloc(1, sizeof(*node));
-    if (!node) {
-        return ESP_ERR_NO_MEM;
-    }
-
-    node->cleanup_fn = cleanup_fn;
-    node->next = s_state_cleanups;
-    s_state_cleanups = node;
-    s_state_cleanup_count++;
+    node->next = s_exit_cleanups;
+    s_exit_cleanups = node;
+    s_exit_cleanup_count++;
     return ESP_OK;
 }
 
@@ -1202,36 +1165,15 @@ const cap_lua_module_t *cap_lua_get_module(size_t index)
     return &s_modules[index];
 }
 
-size_t cap_lua_get_runtime_cleanup_count(void)
+size_t cap_lua_get_exit_cleanup_count(void)
 {
-    return s_runtime_cleanup_count;
+    return s_exit_cleanup_count;
 }
 
-cap_lua_runtime_cleanup_fn_t cap_lua_get_runtime_cleanup(size_t index)
+cap_lua_exit_cleanup_fn_t cap_lua_get_exit_cleanup(size_t index)
 {
     size_t i = 0;
-    cap_lua_runtime_cleanup_node_t *it = s_runtime_cleanups;
-
-    while (it != NULL) {
-        if (i == index) {
-            return it->cleanup_fn;
-        }
-        i++;
-        it = it->next;
-    }
-
-    return NULL;
-}
-
-size_t cap_lua_get_state_cleanup_count(void)
-{
-    return s_state_cleanup_count;
-}
-
-cap_lua_state_cleanup_fn_t cap_lua_get_state_cleanup(size_t index)
-{
-    size_t i = 0;
-    cap_lua_state_cleanup_node_t *it = s_state_cleanups;
+    cap_lua_exit_cleanup_node_t *it = s_exit_cleanups;
 
     while (it != NULL) {
         if (i == index) {

@@ -362,7 +362,7 @@ lv_point_precise_t *lua_lvgl_build_line_points(lua_State *L, int opts_index, uin
 void lua_lvgl_apply_style_opts_locked(lua_State *L, int index, lv_obj_t *obj);
 
 esp_err_t lua_lvgl_deinit_runtime(void);
-void lua_lvgl_state_cleanup(lua_State *L);
+void lua_lvgl_exit_cleanup(lua_State *L);
 int lua_lvgl_create_widget(lua_State *L, lua_lvgl_obj_type_t type);
 
 /* Module-level function tables: only runtime + factories + event-loop

@@ -524,7 +524,7 @@ static int lua_lvgl_deinit(lua_State *L)
     lua_pushboolean(L, 1);
     return 1;
 }
-void lua_lvgl_state_cleanup(lua_State *L)
+void lua_lvgl_exit_cleanup(lua_State *L)
 {
     /* Single-script subsystem: only the runtime owner triggers a deinit on
      * exit. Non-owner Lua states are expected to never create LVGL objects
@@ -534,7 +534,7 @@ void lua_lvgl_state_cleanup(lua_State *L)
         return;
     }
     if (s_lvgl.runtime_initialized && s_lvgl.runtime_owner == L) {
-        ESP_LOGI(TAG, "Lua runtime cleanup: deinitializing lvgl owned by exiting state");
+        ESP_LOGI(TAG, "Lua exit cleanup: deinitializing lvgl owned by exiting state");
         (void)lua_lvgl_deinit_runtime();
     }
 }

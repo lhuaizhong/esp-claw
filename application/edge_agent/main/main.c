@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "app_claw.h"
+#include "claw_ramfs.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -26,8 +27,12 @@
 #endif
 #include "app_config.h"
 
-#define APP_FATFS_PARTITION_LABEL "storage"
 #define APP_ENABLE_MEM_LOG        (0)
+
+#define APP_FATFS_PARTITION_LABEL "storage"
+#define APP_RAMFS_BASE_PATH       "/ramfs"
+#define APP_RAMFS_MAX_FILES       (8)
+#define APP_RAMFS_MAX_BYTES       (512 * 1024)
 
 static const char *TAG = "app";
 
@@ -259,6 +264,29 @@ static esp_err_t init_fatfs(void)
     return ESP_OK;
 }
 
+static esp_err_t init_ramfs(void)
+{
+    claw_ramfs_config_t config = {
+        .base_path = APP_RAMFS_BASE_PATH,
+        .max_files = APP_RAMFS_MAX_FILES,
+        .max_bytes = APP_RAMFS_MAX_BYTES,
+        .caps = MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT,
+    };
+    esp_err_t err = claw_ramfs_register(&config);
+
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to mount RAMFS at %s: %s", APP_RAMFS_BASE_PATH, esp_err_to_name(err));
+        return err;
+    }
+
+    ESP_LOGI(TAG, "RAMFS mounted at %s max_files=%u max_bytes=%u",
+             APP_RAMFS_BASE_PATH,
+             (unsigned int)APP_RAMFS_MAX_FILES,
+             (unsigned int)APP_RAMFS_MAX_BYTES);
+
+    return ESP_OK;
+}
+
 static esp_err_t init_timezone(const char *timezone)
 {
     esp_err_t err = ESP_OK;
@@ -336,6 +364,7 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_board_manager_init());
     ESP_ERROR_CHECK(app_claw_ui_start());
     ESP_ERROR_CHECK(init_fatfs());
+    ESP_ERROR_CHECK(init_ramfs());
     ESP_ERROR_CHECK(wifi_manager_init());
     ESP_ERROR_CHECK(http_server_init(&(http_server_config_t) {
         .storage_base_path = app_fatfs_base_path,

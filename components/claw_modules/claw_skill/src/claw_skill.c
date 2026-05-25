@@ -1310,16 +1310,6 @@ esp_err_t claw_skill_reload_registry(void)
     return err;
 }
 
-const char *claw_skill_get_skills_root_dir(void)
-{
-    if (!s_skill || !s_skill->initialized || s_skill->root_count == 0) {
-        return NULL;
-    }
-
-    /* The primary (writable) root: where new skills are registered/unregistered. */
-    return s_skill->roots[0];
-}
-
 esp_err_t claw_skill_read_skills_list(char *buf, size_t size)
 {
     return claw_skill_render_skills_list(buf, size);

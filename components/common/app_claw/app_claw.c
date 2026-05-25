@@ -22,6 +22,7 @@
 #include "cap_session_mgr.h"
 #endif
 #include "claw_core.h"
+#include "claw_paths.h"
 #include "claw_event_publisher.h"
 #include "claw_event_router.h"
 #include "claw_memory.h"
@@ -214,10 +215,40 @@ static void app_time_sync_success(bool had_valid_time, void *ctx)
 }
 #endif
 
-esp_err_t app_claw_start(const app_claw_config_t *config,
-                         const app_claw_storage_paths_t *paths)
+// Resolve the storage paths threaded through the capability framework from the
+// logical homes registered in claw_paths. This is where app_claw owns the data
+// layout (the subdirectory convention); main only decides the mount points.
+static esp_err_t build_storage_paths(app_claw_storage_paths_t *paths)
+{
+    memset(paths, 0, sizeof(*paths));
+
+    ESP_RETURN_ON_ERROR(claw_paths_join(CLAW_PATH_DATA, NULL, paths->fatfs_base_path, sizeof(paths->fatfs_base_path)),
+                        TAG, "data home unavailable");
+    ESP_RETURN_ON_ERROR(claw_paths_join(CLAW_PATH_DATA, "sessions", paths->memory_session_root, sizeof(paths->memory_session_root)),
+                        TAG, "session root path too long");
+    ESP_RETURN_ON_ERROR(claw_paths_join(CLAW_PATH_DATA, "memory", paths->memory_root_dir, sizeof(paths->memory_root_dir)),
+                        TAG, "memory root path too long");
+    ESP_RETURN_ON_ERROR(claw_paths_join(CLAW_PATH_DATA, "skills", paths->skills_root_dir, sizeof(paths->skills_root_dir)),
+                        TAG, "skills root path too long");
+    ESP_RETURN_ON_ERROR(claw_paths_join(CLAW_PATH_DATA, "scripts", paths->lua_root_dir, sizeof(paths->lua_root_dir)),
+                        TAG, "lua root path too long");
+    ESP_RETURN_ON_ERROR(claw_paths_join(CLAW_PATH_DATA, "router_rules/router_rules.json", paths->router_rules_path, sizeof(paths->router_rules_path)),
+                        TAG, "router rules path too long");
+    ESP_RETURN_ON_ERROR(claw_paths_join(CLAW_PATH_DATA, "scheduler/schedules.json", paths->scheduler_rules_path, sizeof(paths->scheduler_rules_path)),
+                        TAG, "scheduler rules path too long");
+    ESP_RETURN_ON_ERROR(claw_paths_join(CLAW_PATH_DATA, "inbox", paths->im_attachment_root, sizeof(paths->im_attachment_root)),
+                        TAG, "inbox path too long");
+
+    ESP_RETURN_ON_ERROR(claw_paths_join(CLAW_PATH_SYSTEM, "skills", paths->system_skills_root_dir, sizeof(paths->system_skills_root_dir)),
+                        TAG, "system skills root path too long");
+
+    return ESP_OK;
+}
+
+esp_err_t app_claw_start(const app_claw_config_t *config)
 {
     claw_core_config_t core_config = {0};
+    app_claw_storage_paths_t paths;
     const uint32_t max_tool_iterations = 32;
     claw_event_router_config_t router_config = {
         .rules_path = NULL,
@@ -235,22 +266,23 @@ esp_err_t app_claw_start(const app_claw_config_t *config,
     };
     bool llm_enabled = false;
 
-    if (!config || !paths) {
+    if (!config) {
         return ESP_ERR_INVALID_ARG;
     }
+    ESP_RETURN_ON_ERROR(build_storage_paths(&paths), TAG, "Failed to resolve storage paths");
 
     llm_enabled = app_llm_is_configured(config);
     router_config.default_route_messages_to_agent = llm_enabled;
-    router_config.rules_path = paths->router_rules_path;
+    router_config.rules_path = paths.router_rules_path;
 
 #if CONFIG_APP_CLAW_CAP_SESSION_MGR
-    ESP_RETURN_ON_ERROR(cap_session_mgr_set_session_root_dir(paths->memory_session_root),
+    ESP_RETURN_ON_ERROR(cap_session_mgr_set_session_root_dir(paths.memory_session_root),
                         TAG, "Failed to configure session manager");
 #endif
     ESP_RETURN_ON_ERROR(claw_event_router_init(&router_config), TAG, "Failed to init event router");
 #if CONFIG_APP_CLAW_CAP_SCHEDULER
     ESP_RETURN_ON_ERROR(cap_scheduler_init(&(cap_scheduler_config_t) {
-                            .schedules_path = paths->scheduler_rules_path,
+                            .schedules_path = paths.scheduler_rules_path,
                             .tick_ms = 1000,
                             .max_items = 32,
                             .task_stack_size = 6144,
@@ -261,13 +293,13 @@ esp_err_t app_claw_start(const app_claw_config_t *config,
                         }),
                         TAG, "Failed to init scheduler");
 #endif
-    ESP_RETURN_ON_ERROR(init_memory(config, paths, max_tool_iterations), TAG, "Failed to init memory");
+    ESP_RETURN_ON_ERROR(init_memory(config, &paths, max_tool_iterations), TAG, "Failed to init memory");
 #if CONFIG_APP_CLAW_CAP_SESSION_MGR
     ESP_RETURN_ON_ERROR(cap_session_mgr_set_delete_session_handler(app_claw_delete_session_history, NULL),
                         TAG, "Failed to register session delete handler");
 #endif
-    ESP_RETURN_ON_ERROR(init_skills(paths), TAG, "Failed to init skills");
-    ESP_RETURN_ON_ERROR(app_capabilities_init(config, paths), TAG, "Failed to init capabilities");
+    ESP_RETURN_ON_ERROR(init_skills(&paths), TAG, "Failed to init skills");
+    ESP_RETURN_ON_ERROR(app_capabilities_init(config, &paths), TAG, "Failed to init capabilities");
 #if CONFIG_APP_CLAW_CAP_IM_QQ
     ESP_RETURN_ON_ERROR(claw_event_router_register_outbound_binding("qq", "qq_send_message"),
                         TAG, "Failed to bind QQ outbound");

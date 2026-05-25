@@ -135,13 +135,15 @@ Rules:
 
 ## Filesystem Path Rules
 
-When the model reads files bundled with a skill, use filesystem-relative paths:
+File tool paths (`read_file`, `write_file`, ...) must be absolute. When the model
+reads files bundled with a skill, use the `{CUR_SKILL_DIR}` placeholder, which
+expands to the skill's absolute directory:
 
 - `read_file("{CUR_SKILL_DIR}/references/guide.md")`
 - `read_file("{CUR_SKILL_DIR}/scripts/action.lua")`
 - `read_file("{CUR_SKILL_DIR}/assets/name.ext")`
 
-Do not assume the source component directory name, and do not use `../` to move to a parent directory.
+Do not pass relative paths, do not assume the source component directory name, and do not use `../` to move to a parent directory.
 
 ## Lua Skill Script Rules
 

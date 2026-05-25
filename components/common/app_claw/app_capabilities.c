@@ -68,6 +68,7 @@
 #endif
 #include "claw_cap.h"
 #include "claw_memory.h"
+#include "claw_paths.h"
 #include "esp_check.h"
 #include "esp_log.h"
 
@@ -235,13 +236,6 @@ static esp_err_t app_cap_register_entry(const app_capability_group_entry_t *entr
 }
 
 #if CONFIG_APP_CLAW_CAP_FILES
-static esp_err_t app_cap_prepare_files(const app_claw_config_t *config,
-                                       const app_claw_storage_paths_t *paths)
-{
-    (void)config;
-    return cap_files_set_base_dir(paths->fatfs_base_path);
-}
-
 static esp_err_t app_cap_register_files(const app_claw_config_t *config,
                                         const app_claw_storage_paths_t *paths)
 {
@@ -420,10 +414,16 @@ static esp_err_t app_cap_register_scheduler(const app_claw_config_t *config,
 static esp_err_t app_cap_prepare_lua(const app_claw_config_t *config,
                                      const app_claw_storage_paths_t *paths)
 {
+    /* Builtin Lua libraries are baked into the read-only system partition by
+     * sync_lua_module_resources.py, so require() must search there — not under
+     * paths->lua_root_dir (the writable data root). */
+    const char *system_root = claw_paths_get(CLAW_PATH_SYSTEM);
     char path_temp[96];
-    snprintf(path_temp, sizeof(path_temp), "%s/builtin", paths->lua_root_dir);
+
+    ESP_RETURN_ON_FALSE(system_root, ESP_ERR_INVALID_STATE, TAG, "CLAW_PATH_SYSTEM not configured");
+    snprintf(path_temp, sizeof(path_temp), "%s/scripts/builtin", system_root);
     cap_lua_add_package_path_dir(path_temp);
-    snprintf(path_temp, sizeof(path_temp), "%s/builtin/lib", paths->lua_root_dir);
+    snprintf(path_temp, sizeof(path_temp), "%s/scripts/builtin/lib", system_root);
     cap_lua_add_package_path_dir(path_temp);
 
     return app_lua_modules_register(config, paths->fatfs_base_path);
@@ -433,7 +433,8 @@ static esp_err_t app_cap_register_lua(const app_claw_config_t *config,
                                       const app_claw_storage_paths_t *paths)
 {
     (void)config;
-    return cap_lua_register_group(paths->lua_root_dir);
+    (void)paths;
+    return cap_lua_register_group();
 }
 #endif
 
@@ -462,8 +463,7 @@ static esp_err_t app_cap_register_skill_mgr(const app_claw_config_t *config,
                                             const app_claw_storage_paths_t *paths)
 {
     (void)config;
-    (void)paths;
-    return cap_skill_mgr_register_group();
+    return cap_skill_mgr_register_group(paths ? paths->skills_root_dir : NULL);
 }
 #endif
 
@@ -592,7 +592,7 @@ static const app_capability_group_entry_t s_capability_group_entries[] = {
     { "cap_im_local", "Local IM", "Register local / Web IM cap", false, app_cap_prepare_im_local, app_cap_register_im_local },
 #endif
 #if CONFIG_APP_CLAW_CAP_FILES
-    { "cap_files", "Files", "Register files cap", true, app_cap_prepare_files, app_cap_register_files },
+    { "cap_files", "Files", "Register files cap", true, NULL, app_cap_register_files },
 #endif
 #if CONFIG_APP_CLAW_CAP_SCHEDULER
     { "cap_scheduler", "Scheduler", "Register scheduler cap", true, NULL, app_cap_register_scheduler },

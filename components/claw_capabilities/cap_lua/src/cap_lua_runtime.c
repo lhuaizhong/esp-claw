@@ -306,10 +306,7 @@ static void cap_lua_add_script_dir_to_package_path(lua_State *L, const char *scr
 
 esp_err_t cap_lua_runtime_init(void)
 {
-    ESP_LOGI(TAG,
-             "Lua runtime ready: scripts=%s registered_modules=%u",
-             cap_lua_get_base_dir(),
-             (unsigned int)cap_lua_get_module_count());
+    ESP_LOGI(TAG,"Lua runtime ready: registered_modules=%u", (unsigned int)cap_lua_get_module_count());
     return ESP_OK;
 }
 

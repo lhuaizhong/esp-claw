@@ -62,11 +62,9 @@ esp_err_t claw_skill_init(const claw_skill_config_t *config);
 /**
  * @brief  Register a skills directory and reload the registry
  *
- *         Call once per directory. The first directory added is the primary
- *         (writable) root returned by claw_skill_get_skills_root_dir() and is
- *         the target of register/unregister. Directories added earlier take
- *         priority: a skill id found in an earlier directory shadows the same
- *         id in a later one.
+ *         Call once per directory. Directories added earlier take priority:
+ *         a skill id found in an earlier directory shadows the same id in a
+ *         later one.
  *
  * @param[in]  dir  Absolute path of the directory to scan for skills
  *
@@ -88,18 +86,6 @@ esp_err_t claw_skill_add_directory(const char *dir);
  *         - other errors while scanning the directories
  */
 esp_err_t claw_skill_reload_registry(void);
-
-/**
- * @brief  Get the primary (writable) skills root directory
- *
- *         This is the first directory added and the target of
- *         register/unregister operations.
- *
- * @return
- *         - Pointer to the root path on success
- *         - NULL if not initialized or no directory has been added
- */
-const char *claw_skill_get_skills_root_dir(void);
 
 /**
  * @brief  Render the skill catalog as a plain-text list for the prompt layer

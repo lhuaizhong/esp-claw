@@ -5,6 +5,7 @@
  */
 #include "app_claw.h"
 #include "app_fs.h"
+#include "claw_paths.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -33,7 +34,6 @@ static const char *TAG = "app";
 
 static app_config_t *s_config;
 static app_claw_config_t *s_claw_config;
-static app_claw_storage_paths_t *s_claw_paths;
 
 static esp_err_t app_allocate_runtime_state(void)
 {
@@ -43,11 +43,8 @@ static esp_err_t app_allocate_runtime_state(void)
     if (!s_claw_config) {
         s_claw_config = calloc(1, sizeof(*s_claw_config));
     }
-    if (!s_claw_paths) {
-        s_claw_paths = calloc(1, sizeof(*s_claw_paths));
-    }
 
-    ESP_RETURN_ON_FALSE(s_config && s_claw_config && s_claw_paths, ESP_ERR_NO_MEM, TAG,
+    ESP_RETURN_ON_FALSE(s_config && s_claw_config, ESP_ERR_NO_MEM, TAG,
                         "Failed to allocate runtime state");
 
     return ESP_OK;
@@ -55,9 +52,6 @@ static esp_err_t app_allocate_runtime_state(void)
 
 static void app_free_runtime_state(void)
 {
-    free(s_claw_paths);
-    s_claw_paths = NULL;
-
     free(s_claw_config);
     s_claw_config = NULL;
 
@@ -83,28 +77,6 @@ static void on_wifi_state_changed(bool connected, void *user_ctx)
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Failed to update network emote: %s", esp_err_to_name(err));
     }
-}
-
-static esp_err_t app_claw_init_storage_paths(app_claw_storage_paths_t *paths)
-{
-    ESP_RETURN_ON_FALSE(paths, ESP_ERR_INVALID_ARG, TAG, "paths is NULL");
-
-    memset(paths, 0, sizeof(*paths));
-
-    const char *base = app_fs_storage_base_path();
-    bool overflow =
-        strlcpy(paths->fatfs_base_path, base, sizeof(paths->fatfs_base_path)) >= sizeof(paths->fatfs_base_path) ||
-        snprintf(paths->memory_session_root, sizeof(paths->memory_session_root), "%s/sessions", base) >= sizeof(paths->memory_session_root) ||
-        snprintf(paths->memory_root_dir, sizeof(paths->memory_root_dir), "%s/memory", base) >= sizeof(paths->memory_root_dir) ||
-        snprintf(paths->skills_root_dir, sizeof(paths->skills_root_dir), "%s/skills", base) >= sizeof(paths->skills_root_dir) ||
-        snprintf(paths->system_skills_root_dir, sizeof(paths->system_skills_root_dir), "%s/skills", APP_FS_SYSTEM_BASE_PATH) >= sizeof(paths->system_skills_root_dir) ||
-        snprintf(paths->lua_root_dir, sizeof(paths->lua_root_dir), "%s/scripts", base) >= sizeof(paths->lua_root_dir) ||
-        snprintf(paths->router_rules_path, sizeof(paths->router_rules_path), "%s/router_rules/router_rules.json", base) >= sizeof(paths->router_rules_path) ||
-        snprintf(paths->scheduler_rules_path, sizeof(paths->scheduler_rules_path), "%s/scheduler/schedules.json", base) >= sizeof(paths->scheduler_rules_path) ||
-        snprintf(paths->im_attachment_root, sizeof(paths->im_attachment_root), "%s/inbox", base) >= sizeof(paths->im_attachment_root);
-    ESP_RETURN_ON_FALSE(!overflow, ESP_ERR_INVALID_SIZE, TAG, "Storage path truncated");
-
-    return ESP_OK;
 }
 
 static esp_err_t main_load_config(app_config_t *config)
@@ -343,8 +315,7 @@ void app_main(void)
         }
     }
 
-    ESP_ERROR_CHECK(app_claw_init_storage_paths(s_claw_paths));
-    ESP_ERROR_CHECK(app_claw_start(s_claw_config, s_claw_paths));
+    ESP_ERROR_CHECK(app_claw_start(s_claw_config));
 #if CONFIG_APP_CLAW_CAP_IM_LOCAL
     ESP_ERROR_CHECK(http_server_webim_bind_im());
 #endif

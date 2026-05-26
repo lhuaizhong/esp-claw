@@ -135,6 +135,13 @@ menu "App Claw Config"
                 Enable the LLM inspect capability and keep app_claw's direct dependency
                 on cap_llm_inspect.
 
+        config APP_CLAW_CAP_HTTP_REQUEST
+            bool "Enable HTTP request capability"
+            default y
+            help
+                Enable the HTTP request capability and keep app_claw's direct dependency
+                on cap_http_request.
+
         config APP_CLAW_CAP_WEB_SEARCH
             bool "Enable web search capability"
             default y

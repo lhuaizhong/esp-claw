@@ -60,6 +60,9 @@
 #if CONFIG_APP_CLAW_CAP_TIME
 #include "cap_time.h"
 #endif
+#if CONFIG_APP_CLAW_CAP_HTTP_REQUEST
+#include "cap_http_request.h"
+#endif
 #if CONFIG_APP_CLAW_CAP_WEB_SEARCH
 #include "cap_web_search.h"
 #endif
@@ -494,6 +497,26 @@ static esp_err_t app_cap_register_llm_inspect(const app_claw_config_t *config,
 }
 #endif
 
+#if CONFIG_APP_CLAW_CAP_HTTP_REQUEST
+static esp_err_t app_cap_prepare_http_request(const app_claw_config_t *config,
+                                              const app_claw_storage_paths_t *paths)
+{
+    (void)paths;
+
+    ESP_RETURN_ON_ERROR(cap_http_request_set_allowlist(config->search_http_allowlist),
+                        TAG, "Failed to set HTTP allowlist");
+    return ESP_OK;
+}
+
+static esp_err_t app_cap_register_http_request(const app_claw_config_t *config,
+                                               const app_claw_storage_paths_t *paths)
+{
+    (void)config;
+    (void)paths;
+    return cap_http_request_register_group();
+}
+#endif
+
 #if CONFIG_APP_CLAW_CAP_WEB_SEARCH
 static esp_err_t app_cap_prepare_web_search(const app_claw_config_t *config,
                                             const app_claw_storage_paths_t *paths)
@@ -509,9 +532,6 @@ static esp_err_t app_cap_prepare_web_search(const app_claw_config_t *config,
         ESP_RETURN_ON_ERROR(cap_web_search_set_tavily_key(config->search_tavily_key),
                             TAG, "Failed to set Tavily search key");
     }
-
-    ESP_RETURN_ON_ERROR(cap_web_search_set_http_allowlist(config->search_http_allowlist),
-                        TAG, "Failed to set HTTP allowlist");
 
     return ESP_OK;
 }
@@ -591,6 +611,9 @@ static const app_capability_group_entry_t s_capability_group_entries[] = {
 #if CONFIG_APP_CLAW_CAP_LLM_INSPECT
     { "cap_llm_inspect", "LLM Inspect", "Register LLM inspect cap", true, NULL, app_cap_register_llm_inspect },
 #endif
+#if CONFIG_APP_CLAW_CAP_HTTP_REQUEST
+    { "cap_http_request", "HTTP Request", "Register HTTP request cap", true, app_cap_prepare_http_request, app_cap_register_http_request },
+#endif
 #if CONFIG_APP_CLAW_CAP_WEB_SEARCH
     { "cap_web_search", "Web Search", "Register web search cap", true, app_cap_prepare_web_search, app_cap_register_web_search },
 #endif
@@ -647,6 +670,9 @@ static const app_capability_group_info_t s_capability_group_infos[] = {
 #endif
 #if CONFIG_APP_CLAW_CAP_LLM_INSPECT
     { "cap_llm_inspect", "LLM Inspect", false },
+#endif
+#if CONFIG_APP_CLAW_CAP_HTTP_REQUEST
+    { "cap_http_request", "HTTP Request", false },
 #endif
 #if CONFIG_APP_CLAW_CAP_WEB_SEARCH
     { "cap_web_search", "Web Search", false },

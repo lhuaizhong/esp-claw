@@ -5,7 +5,7 @@
   "metadata": {
     "cap_groups": [
       "cap_lua",
-      "cap_web_search",
+      "cap_http_request",
       "cap_boards"
     ],
     "manage_mode": "readonly"
@@ -24,7 +24,7 @@ Use this skill when the user wants to install a skill from the ESP-Claw's Skill 
 ## Hard rules
 1. Installation requires the exact skill name, not the skill title.
 2. A valid skill name contains only `A-Z`, `a-z`, `0-9`, `_`, or `-`.
-3. Before downloading, make sure `cap_web_search` is enabled and available. If it is unavailable, stop and tell the user to enable web search first.
+3. Before downloading, make sure `cap_http_request` is enabled and available. If it is unavailable, stop and tell the user to enable HTTP request first.
 4. Use `{CUR_SKILL_DIR}/scripts/download_skill.lua` for hub download requests. Do not manually recreate the HTTP flow outside this script.
 5. First fetch `_metadata.json` and return it to yourself as a raw JSON string. Treat that string as the source of truth for install decisions.
 6. If metadata fetch returns a 404 result, tell the user the skill does not exist and stop.

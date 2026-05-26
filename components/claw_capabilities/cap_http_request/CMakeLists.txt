@@ -1,11 +1,10 @@
 idf_component_register(
     SRCS
-        "src/cap_web_search.c"
-        "src/cmd_cap_web_search.c"
+        "src/cap_http_request.c"
     INCLUDE_DIRS
         "include"
     REQUIRES
         claw_cap
         esp_http_client
-        console
+        http_reuse
 )

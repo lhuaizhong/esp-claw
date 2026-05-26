@@ -130,7 +130,7 @@ build_application_edge_agent:
         EXAMPLE_BOARD_BRAND: "m5stack"
 
       - IMAGE: ["espressif/idf:release-v5.5"]
-        EXAMPLE_BOARD: dfrobot_k10
+        EXAMPLE_BOARD: ["dfrobot_k10", "dfrobot_ai_camera"]
         EXAMPLE_TARGET: esp32s3
         EXAMPLE_BOARD_BRAND: "dfrobot"
 
@@ -168,3 +168,8 @@ build_application_edge_agent:
         EXAMPLE_BOARD: esp32_s31_korvo1
         EXAMPLE_TARGET: esp32s31
         EXAMPLE_BOARD_BRAND: "espressif"
+
+      - IMAGE: ["espressif/idf:release-v5.5"]
+        EXAMPLE_BOARD: dfrobot_firebeetle_2_ESP32_P4_for_camera
+        EXAMPLE_TARGET: esp32p4
+        EXAMPLE_BOARD_BRAND: "dfrobot"

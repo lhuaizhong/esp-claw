@@ -266,6 +266,13 @@ export const en = {
   fileDevModeConfirm:
     'After entering Dev Mode, you can upload, modify, or delete files. Incorrect changes may cause the system to fail, reboot endlessly, or behave unexpectedly. Please proceed carefully.',
   fileDeleteConfirm: 'Delete {path}?',
+  fileDeleteDirNotEmpty: 'Directory {path} is not empty. Recursively delete all contents? This cannot be undone.',
+  fileDownloadFolder: 'Download folder',
+  fileDownloadingFolder: 'Downloading and packing files…',
+  fileDownloadFolderCancel: 'Give up download',
+  fileDownloadFolderCancelled: 'Folder download cancelled',
+  fileDownloadFolderDone: 'Folder download complete',
+  fileDownloadFolderFailed: 'Folder download failed',
   fileUploadComplete: 'Upload completed',
   fileFolderCreated: 'Folder created',
   fileDeleteComplete: 'Delete completed',

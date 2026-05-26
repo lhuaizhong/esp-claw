@@ -259,6 +259,13 @@ export const zhCn: Dict = {
   fileDevModeConfirm:
     '进入开发者模式后，你可以上传、修改或删除文件。不正确的增删改可能导致系统无法正常运行、无限重启等问题。请注意合理修改。',
   fileDeleteConfirm: '确定删除 {path}？',
+  fileDeleteDirNotEmpty: '文件夹 {path} 不为空，是否递归删除所有内容？此操作不可撤销。',
+  fileDownloadFolder: '下载文件夹',
+  fileDownloadingFolder: '正在逐个下载并打包…',
+  fileDownloadFolderCancel: '放弃下载',
+  fileDownloadFolderCancelled: '已放弃文件夹下载',
+  fileDownloadFolderDone: '文件夹下载完成',
+  fileDownloadFolderFailed: '文件夹下载失败',
   fileUploadComplete: '上传完成',
   fileFolderCreated: '文件夹已创建',
   fileDeleteComplete: '删除完成',

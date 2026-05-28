@@ -255,6 +255,18 @@ static esp_err_t app_cap_register_files(const app_claw_config_t *config,
 static esp_err_t app_cap_prepare_im_qq(const app_claw_config_t *config,
                                        const app_claw_storage_paths_t *paths)
 {
+    (void)config;
+    (void)paths;
+    return ESP_OK;
+}
+
+static esp_err_t app_cap_register_im_qq(const app_claw_config_t *config,
+                                        const app_claw_storage_paths_t *paths)
+{
+    ESP_RETURN_ON_ERROR(cap_im_qq_register_group(),
+                        TAG,
+                        "Failed to register QQ group");
+
     ESP_RETURN_ON_ERROR(cap_im_qq_set_attachment_config(&(cap_im_qq_attachment_config_t) {
                             .storage_root_dir = paths->im_attachment_root,
                             .max_inbound_file_bytes = APP_IM_ATTACHMENT_MAX_BYTES,
@@ -275,20 +287,23 @@ static esp_err_t app_cap_prepare_im_qq(const app_claw_config_t *config,
 
     return ESP_OK;
 }
-
-static esp_err_t app_cap_register_im_qq(const app_claw_config_t *config,
-                                        const app_claw_storage_paths_t *paths)
-{
-    (void)config;
-    (void)paths;
-    return cap_im_qq_register_group();
-}
 #endif
 
 #if CONFIG_APP_CLAW_CAP_IM_FEISHU
 static esp_err_t app_cap_prepare_im_feishu(const app_claw_config_t *config,
                                            const app_claw_storage_paths_t *paths)
 {
+    (void)config;
+    (void)paths;
+    return ESP_OK;
+}
+
+static esp_err_t app_cap_register_im_feishu(const app_claw_config_t *config,
+                                            const app_claw_storage_paths_t *paths)
+{
+    ESP_RETURN_ON_ERROR(cap_im_feishu_register_group(),
+                        TAG, "Failed to register Feishu group");
+
     ESP_RETURN_ON_ERROR(cap_im_feishu_set_attachment_config(&(cap_im_feishu_attachment_config_t) {
                             .storage_root_dir = paths->im_attachment_root,
                             .max_inbound_file_bytes = APP_IM_ATTACHMENT_MAX_BYTES,
@@ -304,20 +319,23 @@ static esp_err_t app_cap_prepare_im_feishu(const app_claw_config_t *config,
 
     return ESP_OK;
 }
-
-static esp_err_t app_cap_register_im_feishu(const app_claw_config_t *config,
-                                            const app_claw_storage_paths_t *paths)
-{
-    (void)config;
-    (void)paths;
-    return cap_im_feishu_register_group();
-}
 #endif
 
 #if CONFIG_APP_CLAW_CAP_IM_TG
 static esp_err_t app_cap_prepare_im_tg(const app_claw_config_t *config,
                                        const app_claw_storage_paths_t *paths)
 {
+    (void)config;
+    (void)paths;
+    return ESP_OK;
+}
+
+static esp_err_t app_cap_register_im_tg(const app_claw_config_t *config,
+                                        const app_claw_storage_paths_t *paths)
+{
+    ESP_RETURN_ON_ERROR(cap_im_tg_register_group(),
+                        TAG, "Failed to register Telegram group");
+
     ESP_RETURN_ON_ERROR(cap_im_tg_set_attachment_config(&(cap_im_tg_attachment_config_t) {
                             .storage_root_dir = paths->im_attachment_root,
                             .max_inbound_file_bytes = APP_IM_ATTACHMENT_MAX_BYTES,
@@ -331,14 +349,6 @@ static esp_err_t app_cap_prepare_im_tg(const app_claw_config_t *config,
     }
 
     return ESP_OK;
-}
-
-static esp_err_t app_cap_register_im_tg(const app_claw_config_t *config,
-                                        const app_claw_storage_paths_t *paths)
-{
-    (void)config;
-    (void)paths;
-    return cap_im_tg_register_group();
 }
 #endif
 

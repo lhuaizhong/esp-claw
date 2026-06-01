@@ -1,6 +1,6 @@
 # Agents.md
 
-This file provides guidance to Codex when working with code in this repository.
+This file provides guidance to agents when working with code in this repository.
 
 ## Project Overview
 
@@ -69,34 +69,12 @@ The main entry point is `application/edge_agent/main/main.c`.
 
 ## Project-Specific Notes
 
-- Architecture constraints: [`.agent/design.md`](.agent/design.md)
-- docs guide: [`.agent/docs.md`](.agent/docs.md)
-- Common gotchas: [`.agent/gotchas.md`](.agent/gotchas.md)
-
-## Lua Module Component Layout
-
-Lua module components live under `components/lua_modules/` and are named either `lua_driver_xx` for low-level hardware drivers or `lua_module_xx` for higher-level modules. A typical component, such as `lua_module_audio/`, uses this structure:
-
-```text
-lua_module_audio/
-├── CMakeLists.txt              # required; registers the ESP-IDF component
-├── README.md                   # required; model-facing API contract, similar to a header file
-├── skills/                     # optional; packaged skills built on this module
-│   └── skill_id/
-│       ├── SKILL.md            # required per skill; tells the agent when/how to use it
-│       └── scripts/
-│           └── xxx.lua         # skill-owned scripts invoked by the skill
-├── test/                       # optional; model-readable reference tests/demos
-│   └── xxx.lua                 # reference only; do not treat as a user-facing action
-├── lib/                        # optional; reusable Lua libraries for other scripts
-│   ├── xxx.lua                 # library implementation
-│   └── xxx.md                  # required public interface doc for the matching .lua file
-└── src/                        # optional; C implementation for the Lua module
-    ├── xxx.c
-    └── xxx.h
-```
-
-`README.md` must document only APIs that actually exist: purpose, Lua API or library entry points, arguments, return values, error behavior, cleanup requirements, blocking behavior, concurrency limits, and hardware ownership when relevant. `skills/<skill_id>/` is copied as a complete skill into the FATFS image, while `lib/` and `test/` are synced as builtin Lua resources; every synced `lib/*.lua` must have a same-name `lib/*.md`.
+- Architecture constraints: [`design.md`](.agent/design.md)
+- docs guide: [`docs.md`](.agent/docs.md)
+- Common gotchas: [`gotchas.md`](.agent/gotchas.md)
+- Specs (`.agent/spec/`):
+  - lua module spec: [lua-module-spec.md](.agent/spec/lua-module-spec.md)
+  - claw skill spec: [claw-skill-spec.md](.agent/spec/claw-skill-spec.md)
 
 ## Code Style
 

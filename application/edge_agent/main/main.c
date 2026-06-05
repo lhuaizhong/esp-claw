@@ -59,6 +59,20 @@ static void app_free_runtime_state(void)
     s_config = NULL;
 }
 
+static void log_wifi_startup_config(const app_config_t *config)
+{
+    ESP_LOGI(TAG,
+             "Wi-Fi startup STA: ssid=%s pwd_len=%u",
+             config->wifi_ssid[0] ? config->wifi_ssid : "(empty)",
+             (unsigned)strlen(config->wifi_password));
+
+    ESP_LOGI(TAG,
+             "Wi-Fi startup AP: ssid=%s pwd_len=%u behavior=%s",
+             config->ap_ssid[0] ? config->ap_ssid : "(auto:mac-suffix)",
+             (unsigned)strlen(config->ap_password),
+             config->ap_behavior[0] ? config->ap_behavior : "keep");
+}
+
 static void on_wifi_state_changed(bool connected, void *user_ctx)
 {
     (void)user_ctx;
@@ -274,6 +288,8 @@ void app_main(void)
     }));
     ESP_ERROR_CHECK(wifi_manager_register_state_callback(on_wifi_state_changed, NULL));
 
+    log_wifi_startup_config(s_config);
+
     esp_err_t wifi_err = wifi_manager_start(&(wifi_manager_config_t) {
         .sta_ssid = s_config->wifi_ssid,
         .sta_password = s_config->wifi_password,
@@ -293,12 +309,29 @@ void app_main(void)
         }
 
         if (s_config->wifi_ssid[0] != '\0') {
-            if (wifi_manager_wait_connected(30000) == ESP_OK) {
+            esp_err_t wait_err = wifi_manager_wait_connected(30000);
+            if (wait_err == ESP_OK) {
                 wifi_manager_status_t status = {0};
                 wifi_manager_get_status(&status);
                 ESP_LOGI(TAG, "Wi-Fi STA ready: %s", status.sta_ip);
+            } else if (wait_err == ESP_FAIL) {
+                wifi_manager_status_t status = {0};
+                wifi_manager_get_status(&status);
+                ESP_LOGW(TAG,
+                         "Wi-Fi STA failed after retries: mode=%s ap_active=%d ap_ip=%s",
+                         status.mode ? status.mode : "off",
+                         status.ap_active,
+                         status.ap_ip ? status.ap_ip : "0.0.0.0");
+            } else if (wait_err == ESP_ERR_TIMEOUT) {
+                wifi_manager_status_t status = {0};
+                wifi_manager_get_status(&status);
+                ESP_LOGW(TAG,
+                         "Wi-Fi STA wait timeout: mode=%s ap_active=%d sta_configured=%d",
+                         status.mode ? status.mode : "off",
+                         status.ap_active,
+                         status.sta_configured);
             } else {
-                ESP_LOGW(TAG, "STA could not connect, dropped to AP fallback");
+                ESP_LOGW(TAG, "Wi-Fi STA wait returned error: %s", esp_err_to_name(wait_err));
             }
         }
 

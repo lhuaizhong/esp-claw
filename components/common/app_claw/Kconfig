@@ -464,10 +464,10 @@ menu "App Claw Config"
             depends on ESP_BOARD_DEV_CAMERA_SUPPORT
             default y
             help
-                Enable the vision Lua modules and keep app_claw's direct dependency
-                on lua_module_vision when Lua capability is enabled. The vision
-                component Kconfig controls individual submodules such as
-                motion_detect and espdet.
+                Enable registration of the vision Lua modules from app_claw.
+                The lua_module_vision component is included whenever Lua support
+                and camera support are enabled so its own Kconfig submenu can
+                define vision-specific options such as motion_detect and espdet.
 
     endmenu
 

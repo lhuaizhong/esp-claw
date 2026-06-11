@@ -1,4 +1,7 @@
 menu "Lua Vision Module"
+    depends on APP_CLAW_CAP_LUA
+    depends on APP_CLAW_LUA_MODULE_VISION
+    depends on ESP_BOARD_DEV_CAMERA_SUPPORT
 
     config LUA_MODULE_VISION_MOTION_DETECT
         bool "Enable motion_detect Lua module"

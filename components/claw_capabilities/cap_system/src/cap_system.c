@@ -15,10 +15,13 @@
 
 #include "cJSON.h"
 #include "claw_cap.h"
+#include "claw_version.h"
 #include "claw_task.h"
 #include "esp_check.h"
+#include "esp_app_desc.h"
 #include "esp_chip_info.h"
 #include "esp_err.h"
+#include "esp_idf_version.h"
 #include "esp_log.h"
 #include "esp_netif.h"
 #include "esp_netif_sntp.h"
@@ -447,6 +450,23 @@ static cJSON *cap_system_build_cpu_json(void)
     return root;
 }
 
+static cJSON *cap_system_build_version_json(void)
+{
+    cJSON *root = cJSON_CreateObject();
+
+    if (!root) {
+        ESP_LOGE(TAG, "version json: create failed");
+        return NULL;
+    }
+
+    // ESP-Claw comes from claw_core; Edge Agent comes from ESP-IDF PROJECT_VER embedded in esp_app_desc.
+    cJSON_AddStringToObject(root, "esp_claw", claw_get_version());
+    cJSON_AddStringToObject(root, "esp_claw_git", claw_get_git_version());
+    cJSON_AddStringToObject(root, "edge_agent", esp_app_get_description()->version);
+    cJSON_AddStringToObject(root, "esp_idf", esp_get_idf_version());
+    return root;
+}
+
 static cJSON *cap_system_build_info_json(void)
 {
     cJSON *root = cJSON_CreateObject();
@@ -462,6 +482,7 @@ static cJSON *cap_system_build_info_json(void)
     cJSON_AddNumberToObject(root, "chip_revision", chip_info.revision);
     cJSON_AddNumberToObject(root, "core_count", chip_info.cores);
     cJSON_AddNumberToObject(root, "uptime_ms", (double)(esp_timer_get_time() / 1000));
+    cJSON_AddItemToObject(root, "version", cap_system_build_version_json());
     cJSON_AddItemToObject(root, "memory", cap_system_build_memory_json());
     cJSON_AddItemToObject(root, "cpu", cap_system_build_cpu_json());
     cJSON_AddItemToObject(root, "wifi", cap_system_build_wifi_json());
@@ -562,6 +583,9 @@ static esp_err_t cap_system_build_selected_info_json(const cJSON *sections, char
     }
     if (cap_system_section_is_requested(sections, "uptime")) {
         ESP_GOTO_ON_ERROR(cap_system_add_uptime_section(root), cleanup, TAG, "Failed to add uptime section");
+    }
+    if (cap_system_section_is_requested(sections, "version")) {
+        ESP_GOTO_ON_ERROR(cap_system_add_json_section(root, "version", cap_system_build_version_json), cleanup, TAG, "Failed to add version section");
     }
     if (cap_system_section_is_requested(sections, "memory")) {
         ESP_GOTO_ON_ERROR(cap_system_add_json_section(root, "memory", cap_system_build_memory_json), cleanup, TAG, "Failed to add memory section");
@@ -894,12 +918,13 @@ static const claw_cap_descriptor_t s_system_descriptors[] = {
         .id = "get_system_info",
         .name = "get_system_info",
         .family = "system",
-        .description = "Get system or device information. Omit sections for a full summary, or request selected sections: chip, uptime, memory, cpu, wifi, ip. "
+        .description = "Get system or device information. Omit sections for a full summary, or request selected sections: "
+                       "chip, uptime, version, memory, cpu, wifi, ip. "
                        "**You cannot speculate or fabricate information.**",
         .kind = CLAW_CAP_KIND_CALLABLE,
         .cap_flags = CLAW_CAP_FLAG_CALLABLE_BY_LLM,
         .input_schema_json = "{\"type\":\"object\",\"properties\":{\"sections\":{\"type\":\"array\",\"items\":{\"type\":\"string\","
-                             "\"enum\":[\"chip\",\"uptime\",\"memory\",\"cpu\",\"wifi\",\"ip\"]},\"minItems\":1,\"uniqueItems\":true,"
+                             "\"enum\":[\"chip\",\"uptime\",\"version\",\"memory\",\"cpu\",\"wifi\",\"ip\"]},\"minItems\":1,\"uniqueItems\":true,"
                              "\"description\":\"Optional list of system sections to return. Omit for full summary.\"}}}",
         .execute = cap_system_execute_get_info,
     },

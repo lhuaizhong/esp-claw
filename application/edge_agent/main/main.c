@@ -5,7 +5,9 @@
  */
 #include "app_claw.h"
 #include "app_fs.h"
+#include "claw_version.h"
 #include "claw_paths.h"
+#include "edge_agent_version.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -317,6 +319,9 @@ void app_main(void)
     esp_log_level_set("http_reuse", ESP_LOG_WARN);
 
     ESP_LOGI(TAG, "Starting app");
+    ESP_LOGI(TAG, "ESP-Claw version: %s", claw_get_version());
+    ESP_LOGI(TAG, "ESP-Claw git version: %s", claw_get_git_version());
+    ESP_LOGI(TAG, "Edge Agent version: %s", edge_agent_get_version());
     ESP_ERROR_CHECK(app_allocate_runtime_state());
     ESP_ERROR_CHECK(init_nvs());
     ESP_ERROR_CHECK(app_config_init());

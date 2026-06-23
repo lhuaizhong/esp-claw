@@ -1,7 +1,5 @@
 ## IDF Component Manager Manifest File
 dependencies:
 
-  espressif/esp_mmap_assets: "^2.0.0"
-
-  display_session:
-    path: ../display_session
+  display_arbiter:
+    path: ../display_arbiter

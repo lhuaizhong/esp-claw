@@ -1,0 +1,5 @@
+board: xingzhi_cube_0_96oled_wifi
+chip: esp32s3
+version: 1.0.0
+description: "Nologo.Tech XingZhi Cube 0.96 OLED WiFi Board"
+manufacturer: "Nologo.Tech"

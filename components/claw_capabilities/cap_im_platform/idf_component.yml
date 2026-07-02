@@ -1,4 +1,4 @@
 dependencies:
   claw_utils:
     path: ../../claw_modules/claw_utils
-  espressif/esp_websocket_client: "^1.4.0"
+  espressif/esp_websocket_client: ">=1.4.0,<1.6.0"

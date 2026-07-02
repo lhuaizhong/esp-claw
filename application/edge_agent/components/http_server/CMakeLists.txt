@@ -1,3 +1,5 @@
+include("${CMAKE_BINARY_DIR}/config/sdkconfig.cmake" OPTIONAL)
+
 set(FRONTEND_SOURCE_DIR        "${CMAKE_CURRENT_LIST_DIR}/frontend_source")
 set(FRONTEND_DIST_HTML_GZ      "${FRONTEND_SOURCE_DIR}/dist/index.html.gz")
 set(FRONTEND_PUBLIC_FAVICON_ICO  "${FRONTEND_SOURCE_DIR}/public/favicon.ico")
@@ -35,9 +37,12 @@ set(http_server_requires
     heap
 )
 
+set(http_server_priv_requires
+)
+
 if(CONFIG_APP_CLAW_LUA_MODULE_HTTP_SERVER)
     list(APPEND http_server_srcs "http_server_lua_app_api.c")
-    list(APPEND http_server_requires lua_module_http_server)
+    list(APPEND http_server_priv_requires lua_module_http_server)
 endif()
 
 idf_component_register(
@@ -50,6 +55,8 @@ idf_component_register(
         "${FRONTEND_PUBLIC_FAVICON_ICO}"
     REQUIRES
         ${http_server_requires}
+    PRIV_REQUIRES
+        ${http_server_priv_requires}
 )
 
 # Rebuild the component whenever the bundled UI asset changes on disk.

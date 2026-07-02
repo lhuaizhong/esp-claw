@@ -6,6 +6,36 @@ include("${CMAKE_SOURCE_DIR}/tools/cmake/flash_partition_defaults.cmake")
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(edge_agent VERSION 0.1.0)
 
+set(EDGE_AGENT_BOARD_PERIPH_CONFIG "${CMAKE_SOURCE_DIR}/components/gen_bmgr_codes/gen_board_periph_config.c")
+set(EDGE_AGENT_PATCH_GENERATED_BOARD_CONFIG_SCRIPT
+    "${CMAKE_SOURCE_DIR}/tools/cmake/patch_generated_board_config.cmake"
+)
+
+add_custom_target(edge_agent_patch_generated_board_config
+    COMMAND ${CMAKE_COMMAND}
+            -DEDGE_AGENT_IDF_PATH=$ENV{IDF_PATH}
+            -DEDGE_AGENT_BOARD_PERIPH_CONFIG=${EDGE_AGENT_BOARD_PERIPH_CONFIG}
+            -P ${EDGE_AGENT_PATCH_GENERATED_BOARD_CONFIG_SCRIPT}
+    DEPENDS "${EDGE_AGENT_PATCH_GENERATED_BOARD_CONFIG_SCRIPT}"
+    VERBATIM
+)
+
+idf_component_get_property(EDGE_AGENT_GEN_BMGR_CODES_LIB gen_bmgr_codes COMPONENT_LIB)
+if(EDGE_AGENT_GEN_BMGR_CODES_LIB)
+    add_dependencies(${EDGE_AGENT_GEN_BMGR_CODES_LIB} edge_agent_patch_generated_board_config)
+endif()
+
+if(CONFIG_ESP_BOARD_DEV_AUDIO_CODEC_SUPPORT)
+    idf_component_get_property(EDGE_AGENT_BOARD_MANAGER_LIB espressif__esp_board_manager COMPONENT_LIB)
+    idf_component_get_property(EDGE_AGENT_CODEC_DEV_LIB espressif__esp_codec_dev COMPONENT_LIB)
+    target_link_libraries(${EDGE_AGENT_BOARD_MANAGER_LIB} PUBLIC ${EDGE_AGENT_CODEC_DEV_LIB})
+endif()
+
+if(CONFIG_APP_CLAW_LUA_MODULE_LED_STRIP)
+    idf_component_get_property(EDGE_AGENT_LED_STRIP_LIB espressif__led_strip COMPONENT_LIB)
+    target_compile_definitions(${EDGE_AGENT_LED_STRIP_LIB} PRIVATE RMT_ENCODER_FUNC_ATTR=)
+endif()
+
 set(EDGE_AGENT_FATFS_IMAGE_ROOT "${CMAKE_SOURCE_DIR}/fatfs_image")
 set(EDGE_AGENT_FATFS_SOURCE_ROOT "${EDGE_AGENT_FATFS_IMAGE_ROOT}/storage")
 set(EDGE_AGENT_FATFS_BUILD_ROOT "${CMAKE_BINARY_DIR}/fatfs_image")

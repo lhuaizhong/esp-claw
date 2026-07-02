@@ -1,0 +1,94 @@
+version: 1.0.0
+# Devices Configuration for Nologo.Tech XingZhi Cube 0.96 OLED WiFi
+devices:
+  - name: power_hold
+    type: gpio_ctrl
+    version: default
+    config:
+      active_level: 1
+      default_level: 1
+    peripherals:
+      - name: gpio_power_hold
+
+  # SSD1306 OLED metadata. Use Lua's builtin ssd1306 driver with i2c_oled
+  # (address 0x3C, 128x64) until a generic board-manager OLED device exists.
+  - name: oled_display
+    chip: ssd1306
+    type: custom
+    version: 1.0.0
+    init_skip: true
+    config:
+      i2c_addr: 0x3C
+      width: 128
+      height: 64
+      mirror_x: true
+      mirror_y: true
+      frequency: 400000
+    peripherals:
+      - name: i2c_oled
+
+  - name: audio_dac
+    chip: internal
+    type: audio_codec
+    version: default
+    config:
+      adc_enabled: false
+      dac_enabled: true
+      dac_max_channel: 1
+      dac_channel_mask: "1"
+      dac_init_gain: 10
+      mclk_enabled: false
+    peripherals:
+      - name: i2s_audio_out
+
+  - name: audio_adc
+    chip: internal
+    type: audio_codec
+    version: default
+    config:
+      adc_enabled: true
+      dac_enabled: false
+      adc_max_channel: 1
+      adc_channel_mask: "1"
+      adc_init_gain: 0
+      mclk_enabled: false
+    peripherals:
+      - name: i2s_audio_in
+
+  - name: led_strip
+    chip: ws2812
+    type: custom
+    version: default
+    init_skip: true
+    dependencies:
+      espressif/led_strip:
+        version: "^3.0"
+        public: true
+    config:
+      max_leds: 1
+      gpio_num: 48
+    peripherals:
+      - name: rmt_led
+
+  # Buttons are active-low and are exposed as board metadata for Lua scripts.
+  - name: buttons
+    chip: gpio_button
+    type: custom
+    version: 1.0.0
+    init_skip: true
+    config:
+      boot_gpio: 0
+      volume_up_gpio: 40
+      volume_down_gpio: 39
+      active_level: 0
+
+  - name: charge_detect
+    chip: gpio_input
+    type: custom
+    version: 1.0.0
+    init_skip: true
+    config:
+      gpio_num: 38
+      active_level: 1
+    peripherals:
+      - name: gpio_charge_detect

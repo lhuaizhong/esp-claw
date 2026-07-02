@@ -1,0 +1,95 @@
+version: 1.0.0
+# Peripherals Configuration for Nologo.Tech XingZhi Cube 0.96 OLED WiFi
+peripherals:
+  # SSD1306 OLED: SDA=IO41, SCL=IO42.
+  - name: i2c_oled
+    type: i2c
+    role: master
+    config:
+      port: 0
+      pins:
+        sda: 41
+        scl: 42
+      enable_internal_pullup: true
+
+  # Speaker I2S: BCLK=IO15, LRCK/WS=IO16, DOUT=IO7.
+  - name: i2s_audio_out
+    type: i2s
+    role: master
+    format: std-out
+    config:
+      port: 0
+      sample_rate_hz: 24000
+      clk_src: I2S_CLK_SRC_DEFAULT
+      mclk_multiple: 256
+      data_bit_width: 16
+      slot_bit_width: I2S_SLOT_BIT_WIDTH_AUTO
+      slot_mode: I2S_SLOT_MODE_MONO
+      slot_mask: I2S_STD_SLOT_LEFT
+      ws_width: 16
+      pins:
+        mclk: -1
+        bclk: 15
+        ws: 16
+        dout: 7
+        din: -1
+
+  # Microphone I2S: SCK/BCLK=IO5, WS=IO4, DIN=IO6.
+  - name: i2s_audio_in
+    type: i2s
+    role: master
+    format: std-in
+    config:
+      port: 1
+      sample_rate_hz: 16000
+      clk_src: I2S_CLK_SRC_DEFAULT
+      mclk_multiple: 256
+      data_bit_width: 16
+      slot_bit_width: I2S_SLOT_BIT_WIDTH_AUTO
+      slot_mode: I2S_SLOT_MODE_MONO
+      slot_mask: I2S_STD_SLOT_LEFT
+      ws_width: 16
+      pins:
+        mclk: -1
+        bclk: 5
+        ws: 4
+        dout: -1
+        din: 6
+
+  # Built-in RGB/status LED data pin from the reference board.
+  - name: rmt_led
+    type: rmt
+    role: tx
+    config:
+      gpio_num: 48
+      clk_src: RMT_CLK_SRC_DEFAULT
+      resolution_hz: 10000000
+      mem_block_symbols: 64
+      trans_queue_depth: 4
+      intr_priority: 1
+      flags:
+        invert_out: false
+        with_dma: true
+        io_loop_back: false
+        io_od_mode: false
+        allow_pd: false
+        init_level: false
+
+  # Holds the board power latch high. The reference firmware drives IO21 low
+  # before deep sleep to shut the board down.
+  - name: gpio_power_hold
+    type: gpio
+    role: io
+    config:
+      pin: 21
+      mode: GPIO_MODE_OUTPUT
+      default_level: 1
+
+  # Charging status input used by the reference PowerManager.
+  - name: gpio_charge_detect
+    type: gpio
+    role: io
+    config:
+      pin: 38
+      mode: GPIO_MODE_INPUT
+      default_level: 0

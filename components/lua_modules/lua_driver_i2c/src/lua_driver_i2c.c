@@ -5,12 +5,17 @@
  */
 #include "lua_driver_i2c.h"
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 
 #include "cap_lua.h"
 #include "driver/i2c_master.h"
+#include "esp_board_periph.h"
+#include "esp_check.h"
 #include "esp_err.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "i2c_bus.h"
 #include "lauxlib.h"
 
@@ -19,11 +24,15 @@
 #define LUA_DRIVER_I2C_DEFAULT_FREQ_HZ  400000U
 #define LUA_DRIVER_I2C_SCAN_MAX         128
 #define LUA_DRIVER_I2C_RW_MAX_LEN       1024
+#define LUA_DRIVER_I2C_PERIPH_NAME_MAX  64
 
 typedef struct {
     i2c_bus_handle_t bus;
     int port;
-    bool external_owned;
+    bool owns_bus;
+    bool shared_ref;
+    bool board_periph_ref;
+    char board_periph_name[LUA_DRIVER_I2C_PERIPH_NAME_MAX];
 } lua_driver_i2c_bus_ud_t;
 
 typedef struct {
@@ -31,6 +40,135 @@ typedef struct {
     uint8_t addr;
     int bus_ref;
 } lua_driver_i2c_device_ud_t;
+
+typedef struct {
+    i2c_bus_handle_t bus;
+    i2c_config_t conf;
+    uint32_t ref_count;
+    bool owns_driver;
+} lua_driver_i2c_shared_bus_t;
+
+static SemaphoreHandle_t s_i2c_shared_lock;
+static lua_driver_i2c_shared_bus_t s_i2c_shared_buses[I2C_NUM_MAX];
+
+static esp_err_t lua_driver_i2c_ensure_shared_lock(void)
+{
+    if (s_i2c_shared_lock != NULL) {
+        return ESP_OK;
+    }
+
+    s_i2c_shared_lock = xSemaphoreCreateMutex();
+    return s_i2c_shared_lock ? ESP_OK : ESP_ERR_NO_MEM;
+}
+
+static bool lua_driver_i2c_config_matches(const i2c_config_t *a, const i2c_config_t *b)
+{
+    return a && b &&
+           a->mode == b->mode &&
+           a->sda_io_num == b->sda_io_num &&
+           a->scl_io_num == b->scl_io_num &&
+           a->sda_pullup_en == b->sda_pullup_en &&
+           a->scl_pullup_en == b->scl_pullup_en &&
+           a->master.clk_speed == b->master.clk_speed &&
+           a->clk_flags == b->clk_flags;
+}
+
+static esp_err_t lua_driver_i2c_acquire_shared_bus(i2c_port_t port,
+                                                   const i2c_config_t *conf,
+                                                   bool owns_driver,
+                                                   i2c_bus_handle_t *out_bus)
+{
+    lua_driver_i2c_shared_bus_t *slot = NULL;
+    i2c_bus_handle_t bus = NULL;
+    esp_err_t err;
+
+    if (port < 0 || port >= I2C_NUM_MAX || conf == NULL || out_bus == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    *out_bus = NULL;
+
+    err = lua_driver_i2c_ensure_shared_lock();
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    if (xSemaphoreTake(s_i2c_shared_lock, portMAX_DELAY) != pdTRUE) {
+        return ESP_ERR_TIMEOUT;
+    }
+
+    slot = &s_i2c_shared_buses[port];
+    if (slot->bus != NULL) {
+        if (!lua_driver_i2c_config_matches(&slot->conf, conf)) {
+            xSemaphoreGive(s_i2c_shared_lock);
+            return ESP_ERR_INVALID_STATE;
+        }
+        slot->ref_count++;
+        *out_bus = slot->bus;
+        xSemaphoreGive(s_i2c_shared_lock);
+        return ESP_OK;
+    }
+
+    bus = i2c_bus_create(port, conf);
+    if (bus == NULL) {
+        xSemaphoreGive(s_i2c_shared_lock);
+        return ESP_FAIL;
+    }
+
+    slot->bus = bus;
+    slot->conf = *conf;
+    slot->ref_count = 1;
+    slot->owns_driver = owns_driver;
+    *out_bus = bus;
+    xSemaphoreGive(s_i2c_shared_lock);
+    return ESP_OK;
+}
+
+static esp_err_t lua_driver_i2c_release_shared_bus(i2c_port_t port, i2c_bus_handle_t bus)
+{
+    lua_driver_i2c_shared_bus_t *slot = NULL;
+    esp_err_t err;
+
+    if (port < 0 || port >= I2C_NUM_MAX || bus == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    err = lua_driver_i2c_ensure_shared_lock();
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    if (xSemaphoreTake(s_i2c_shared_lock, portMAX_DELAY) != pdTRUE) {
+        return ESP_ERR_TIMEOUT;
+    }
+
+    slot = &s_i2c_shared_buses[port];
+    if (slot->bus != bus || slot->ref_count == 0) {
+        xSemaphoreGive(s_i2c_shared_lock);
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    slot->ref_count--;
+    if (slot->ref_count > 0 || !slot->owns_driver) {
+        xSemaphoreGive(s_i2c_shared_lock);
+        return ESP_OK;
+    }
+
+    if (i2c_bus_get_created_device_num(slot->bus) > 0) {
+        slot->ref_count++;
+        xSemaphoreGive(s_i2c_shared_lock);
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    i2c_bus_handle_t delete_bus = slot->bus;
+    err = i2c_bus_delete(&delete_bus);
+    if (err == ESP_OK) {
+        memset(slot, 0, sizeof(*slot));
+    } else {
+        slot->ref_count++;
+    }
+    xSemaphoreGive(s_i2c_shared_lock);
+    return err;
+}
 
 static lua_driver_i2c_bus_ud_t *lua_driver_i2c_bus_get_ud(lua_State *L, int idx)
 {
@@ -66,14 +204,31 @@ static uint8_t lua_driver_i2c_mem_addr(lua_State *L, int idx)
 
 static esp_err_t lua_driver_i2c_bus_release(lua_driver_i2c_bus_ud_t *ud)
 {
+    esp_err_t err = ESP_OK;
+
     if (ud == NULL || ud->bus == NULL) {
         return ESP_OK;
     }
-    if (ud->external_owned) {
+    if (ud->shared_ref) {
+        err = lua_driver_i2c_release_shared_bus((i2c_port_t)ud->port, ud->bus);
+        if (err == ESP_OK) {
+            ud->bus = NULL;
+            ud->shared_ref = false;
+        }
+    } else if (ud->owns_bus) {
+        err = i2c_bus_delete(&ud->bus);
+    } else {
         ud->bus = NULL;
-        return ESP_OK;
     }
-    return i2c_bus_delete(&ud->bus);
+
+    if (err == ESP_OK && ud->bus == NULL && ud->board_periph_ref) {
+        esp_err_t unref_err = esp_board_periph_unref_handle(ud->board_periph_name);
+        ud->board_periph_ref = false;
+        ud->board_periph_name[0] = '\0';
+        err = unref_err;
+    }
+
+    return err;
 }
 
 static int lua_driver_i2c_bus_gc(lua_State *L)
@@ -279,15 +434,152 @@ static int lua_driver_i2c_device_write(lua_State *L)
     return 0;
 }
 
+static void lua_driver_i2c_push_bus(lua_State *L,
+                                    i2c_bus_handle_t bus,
+                                    int port,
+                                    bool owns_bus,
+                                    bool shared_ref,
+                                    const char *board_periph_name)
+{
+    lua_driver_i2c_bus_ud_t *ud = (lua_driver_i2c_bus_ud_t *)lua_newuserdata(
+        L, sizeof(*ud));
+
+    ud->bus = bus;
+    ud->port = port;
+    ud->owns_bus = owns_bus;
+    ud->shared_ref = shared_ref;
+    ud->board_periph_ref = board_periph_name != NULL && board_periph_name[0] != '\0';
+    ud->board_periph_name[0] = '\0';
+    if (ud->board_periph_ref) {
+        strlcpy(ud->board_periph_name, board_periph_name, sizeof(ud->board_periph_name));
+    }
+    luaL_getmetatable(L, LUA_DRIVER_I2C_BUS_METATABLE);
+    lua_setmetatable(L, -2);
+}
+
+static esp_err_t lua_driver_i2c_open_board_periph(const char *peripheral_name,
+                                                  uint32_t freq_hz,
+                                                  i2c_bus_handle_t *out_bus,
+                                                  int *out_port)
+{
+    i2c_master_bus_handle_t i2c_master_handle = NULL;
+    i2c_master_bus_config_t *i2c_master_cfg = NULL;
+
+    if (!peripheral_name || !peripheral_name[0] || !out_bus || !out_port) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_RETURN_ON_ERROR(esp_board_periph_ref_handle(peripheral_name, (void **)&i2c_master_handle),
+                        "lua_i2c", "Failed to reference board I2C bus '%s'", peripheral_name);
+
+    esp_err_t err = esp_board_periph_get_config(peripheral_name, (void **)&i2c_master_cfg);
+    if (err != ESP_OK) {
+        esp_board_periph_unref_handle(peripheral_name);
+        return err;
+    }
+    if (i2c_master_cfg == NULL) {
+        esp_board_periph_unref_handle(peripheral_name);
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    const i2c_config_t conf = {
+        .mode = I2C_MODE_MASTER,
+        .sda_io_num = i2c_master_cfg->sda_io_num,
+        .scl_io_num = i2c_master_cfg->scl_io_num,
+        .sda_pullup_en = i2c_master_cfg->flags.enable_internal_pullup,
+        .scl_pullup_en = i2c_master_cfg->flags.enable_internal_pullup,
+        .master.clk_speed = freq_hz ? freq_hz : LUA_DRIVER_I2C_DEFAULT_FREQ_HZ,
+        .clk_flags = 0,
+    };
+
+    (void)i2c_master_handle;
+    err = lua_driver_i2c_acquire_shared_bus(i2c_master_cfg->i2c_port, &conf, false, out_bus);
+    if (err != ESP_OK) {
+        esp_board_periph_unref_handle(peripheral_name);
+        return err;
+    }
+    *out_port = (int)i2c_master_cfg->i2c_port;
+    return ESP_OK;
+}
+
+static const char *lua_driver_i2c_find_board_periph(int port, int sda, int scl)
+{
+    extern const esp_board_periph_desc_t g_esp_board_peripherals[];
+    const esp_board_periph_desc_t *desc = g_esp_board_peripherals;
+
+    while (desc && desc->name) {
+        if (desc->type && strcmp(desc->type, "i2c") == 0 &&
+                desc->role == ESP_BOARD_PERIPH_ROLE_MASTER &&
+                desc->cfg != NULL &&
+                desc->cfg_size >= (int)sizeof(i2c_master_bus_config_t)) {
+            const i2c_master_bus_config_t *cfg = (const i2c_master_bus_config_t *)desc->cfg;
+            if ((int)cfg->i2c_port == port &&
+                    (int)cfg->sda_io_num == sda &&
+                    (int)cfg->scl_io_num == scl) {
+                return desc->name;
+            }
+        }
+        desc = desc->next;
+    }
+
+    return NULL;
+}
+
+static int lua_driver_i2c_from_peripheral(lua_State *L)
+{
+    const char *peripheral_name = luaL_checkstring(L, 1);
+    lua_Integer freq = luaL_optinteger(L, 2, LUA_DRIVER_I2C_DEFAULT_FREQ_HZ);
+    i2c_bus_handle_t bus = NULL;
+    int port = 0;
+
+    if (freq <= 0) {
+        return luaL_error(L, "i2c freq must be positive");
+    }
+
+    esp_err_t err = lua_driver_i2c_open_board_periph(peripheral_name,
+                                                     (uint32_t)freq,
+                                                     &bus,
+                                                     &port);
+    if (err != ESP_OK) {
+        return luaL_error(L,
+                          "i2c board peripheral '%s' open failed: %s",
+                          peripheral_name,
+                          esp_err_to_name(err));
+    }
+
+    lua_driver_i2c_push_bus(L, bus, port, false, true, peripheral_name);
+    return 1;
+}
+
 static int lua_driver_i2c_new(lua_State *L)
 {
     lua_Integer port = luaL_checkinteger(L, 1);
     lua_Integer sda = luaL_checkinteger(L, 2);
     lua_Integer scl = luaL_checkinteger(L, 3);
     lua_Integer freq = luaL_optinteger(L, 4, LUA_DRIVER_I2C_DEFAULT_FREQ_HZ);
+    const char *board_periph_name = NULL;
+    i2c_bus_handle_t bus = NULL;
+    esp_err_t err;
+    int resolved_port = 0;
 
     if (freq <= 0) {
         return luaL_error(L, "i2c freq must be positive");
+    }
+
+    board_periph_name = lua_driver_i2c_find_board_periph((int)port, (int)sda, (int)scl);
+    if (board_periph_name != NULL) {
+        err = lua_driver_i2c_open_board_periph(board_periph_name,
+                                               (uint32_t)freq,
+                                               &bus,
+                                               &resolved_port);
+        if (err != ESP_OK) {
+            return luaL_error(L,
+                              "i2c board peripheral '%s' open failed: %s",
+                              board_periph_name,
+                              esp_err_to_name(err));
+        }
+        lua_driver_i2c_push_bus(L, bus, resolved_port, false, true, board_periph_name);
+        return 1;
     }
 
     i2c_config_t conf = {
@@ -300,20 +592,18 @@ static int lua_driver_i2c_new(lua_State *L)
     };
 
     i2c_master_bus_handle_t existing_bus = NULL;
-    bool external_owned = i2c_master_get_bus_handle((i2c_port_t)port, &existing_bus) == ESP_OK;
+    bool owns_bus = i2c_master_get_bus_handle((i2c_port_t)port, &existing_bus) != ESP_OK;
 
-    i2c_bus_handle_t bus = i2c_bus_create((i2c_port_t)port, &conf);
-    if (!bus) {
-        return luaL_error(L, "i2c bus create failed on port %d", (int)port);
+    err = lua_driver_i2c_acquire_shared_bus((i2c_port_t)port,
+                                            &conf,
+                                            owns_bus,
+                                            &bus);
+    if (err != ESP_OK) {
+        return luaL_error(L, "i2c bus create failed on port %d: %s",
+                          (int)port, esp_err_to_name(err));
     }
 
-    lua_driver_i2c_bus_ud_t *ud = (lua_driver_i2c_bus_ud_t *)lua_newuserdata(
-        L, sizeof(*ud));
-    ud->bus = bus;
-    ud->port = (int)port;
-    ud->external_owned = external_owned;
-    luaL_getmetatable(L, LUA_DRIVER_I2C_BUS_METATABLE);
-    lua_setmetatable(L, -2);
+    lua_driver_i2c_push_bus(L, bus, (int)port, owns_bus, true, NULL);
     return 1;
 }
 
@@ -356,10 +646,14 @@ int luaopen_i2c(lua_State *L)
     lua_newtable(L);
     lua_pushcfunction(L, lua_driver_i2c_new);
     lua_setfield(L, -2, "new");
+    lua_pushcfunction(L, lua_driver_i2c_from_peripheral);
+    lua_setfield(L, -2, "from_peripheral");
     return 1;
 }
 
 esp_err_t lua_driver_i2c_register(void)
 {
+    ESP_RETURN_ON_ERROR(lua_driver_i2c_ensure_shared_lock(),
+                        "lua_i2c", "Failed to create shared I2C lock");
     return cap_lua_register_module("i2c", luaopen_i2c);
 }

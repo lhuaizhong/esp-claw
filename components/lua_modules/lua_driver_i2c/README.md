@@ -10,6 +10,11 @@ and talking to multiple devices on the same bus.
   - `port`: I2C port number, usually `0` or `1`
   - `sda`, `scl`: GPIO numbers for SDA and SCL
   - `freq_hz`: optional clock frequency in Hz, default `400000`
+- Or open a board-manager I2C peripheral with
+  `local bus = i2c.from_peripheral("i2c_master" [, freq_hz])`
+  - Use this form for scripts that run alongside firmware-owned board
+    peripherals. The Lua handle keeps the board peripheral referenced while the
+    bus is open and releases only its own reference on `bus:close()`.
 - Scan the bus for devices with `local addrs = bus:scan()`
   - Returns a Lua array of 7-bit addresses that ACKed
 - Attach a device with `local dev = bus:device(addr [, clk_speed])`
@@ -45,6 +50,17 @@ See `scripts/builtin/lib/ssd1306.md` and
 local i2c = require("i2c")
 
 local bus = i2c.new(0, 21, 22, 400000)
+for _, addr in ipairs(bus:scan()) do
+    print(string.format("found device at 0x%02X", addr))
+end
+bus:close()
+```
+
+## Example: scan a board-managed bus
+```lua
+local i2c = require("i2c")
+
+local bus = i2c.from_peripheral("i2c_oled", 400000)
 for _, addr in ipairs(bus:scan()) do
     print(string.format("found device at 0x%02X", addr))
 end
